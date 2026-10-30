@@ -1,0 +1,1107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Reading Nook</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Figtree:wght@400;600;700&family=Young+Serif&display=swap" rel="stylesheet">
+<style>
+/* Layout concept: one full-bleed illustrated room (SVG world, 1200x720) seen through a camera that
+   follows the character and pushes in on the shelf. HUD and dialogs are small paper-and-wood pieces
+   laid over it. The room is a deliberate single look, warm lamplight on cream, sage and walnut. */
+:root {
+  --ink: #2b1c14;
+  --paper: #f6ead2;
+  --paper-2: #ecd9b4;
+  --wood: #8a5a3b;
+  --wood-dark: #4f321f;
+  --amber: #f2a93b;
+  --sage: #7d9a76;
+  --rust: #b5572f;
+  --night: #1f130c;
+  --font-display: "Young Serif", Georgia, "Times New Roman", serif;
+  --font-body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-spine: "Barlow Condensed", "Arial Narrow", Impact, sans-serif;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--night);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.45;
+  overflow: hidden;
+}
+#app { position: relative; height: 100%; min-height: 480px; overflow: hidden; background: var(--night); }
+#scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; user-select: none; -webkit-user-select: none; cursor: pointer; }
+
+/* ambient light over the scene, in screen space */
+.vignette { position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(120% 90% at 50% 45%, rgba(255,190,100,0) 40%, rgba(40,18,6,.55) 100%),
+    linear-gradient(180deg, rgba(255,170,70,.10), rgba(60,20,0,.10));
+  mix-blend-mode: multiply; }
+
+/* HUD */
+.hud { position: absolute; inset: 0; pointer-events: none;
+  padding-block: calc(14px + env(safe-area-inset-top, 0px)) calc(14px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; justify-content: space-between; }
+.hud > * { pointer-events: auto; }
+.brand { align-self: flex-start; pointer-events: none; color: var(--paper); text-shadow: 0 1px 6px rgba(30,12,2,.7); }
+.brand h1 { margin: 0; font: 400 clamp(20px, 3vw, 28px)/1.1 var(--font-display); letter-spacing: .01em; }
+.brand p { margin: 3px 0 0; font-size: 13px; opacity: .9; }
+.hud-bottom { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; pointer-events: none; }
+.hud-bottom > * { pointer-events: auto; }
+.keys { color: var(--paper); font-size: 12.5px; text-shadow: 0 1px 6px rgba(30,12,2,.8); display: flex; flex-direction: column; gap: 4px; align-items: flex-end; text-align: right; }
+@media (max-width: 640px) { .keys { display: none; } }
+kbd { font: 700 11px var(--font-body); background: var(--paper); color: var(--ink); border-radius: 5px; padding: 2px 6px; box-shadow: 0 2px 0 var(--wood-dark); margin: 0 1px; }
+
+.dpad { display: grid; grid-template-columns: repeat(3, 46px); grid-template-rows: repeat(3, 46px); gap: 4px; }
+.dpad button { border: 0; border-radius: 12px; background: rgba(246,234,210,.88); color: var(--wood-dark); font: 700 15px var(--font-body); cursor: pointer;
+  box-shadow: 0 3px 0 var(--wood-dark), 0 6px 14px rgba(30,12,2,.35); touch-action: none; display: grid; place-items: center; }
+.dpad button:active, .dpad button.on { transform: translateY(2px); box-shadow: 0 1px 0 var(--wood-dark); background: var(--amber); }
+.dpad .up { grid-area: 1 / 2; } .dpad .left { grid-area: 2 / 1; } .dpad .act { grid-area: 2 / 2; background: var(--amber); } .dpad .right { grid-area: 2 / 3; } .dpad .down { grid-area: 3 / 2; }
+.dpad svg { width: 18px; height: 18px; fill: currentColor; }
+button:focus-visible, .cover-btn:focus-visible { outline: 3px solid #fff3c4; outline-offset: 2px; }
+
+.prompt { position: absolute; left: 50%; bottom: calc(22px + env(safe-area-inset-bottom, 0px)); transform: translate(-50%, 10px); opacity: 0; pointer-events: none;
+  border: 0; border-radius: 999px; padding: 10px 18px; background: var(--paper); color: var(--ink); font: 600 14px var(--font-body);
+  box-shadow: 0 3px 0 var(--wood-dark), 0 10px 24px rgba(30,12,2,.4); transition: opacity .25s, transform .25s; white-space: nowrap; max-width: calc(100% - 32px); }
+.prompt.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; cursor: pointer; }
+@media (max-width: 640px) { .prompt { bottom: calc(170px + env(safe-area-inset-bottom, 0px)); white-space: normal; text-align: center; width: max-content; } }
+
+/* dialogs */
+.layer { position: absolute; inset: 0; display: none; }
+.layer.open { display: block; }
+.backdrop { position: absolute; inset: 0; background: rgba(31,19,12,.72); backdrop-filter: blur(3px); animation: fade .25s both; }
+@keyframes fade { from { opacity: 0; } }
+@keyframes rise { from { opacity: 0; transform: translateY(14px) scale(.98); } }
+
+.ask { position: absolute; left: max(16px, env(safe-area-inset-left, 0px)); top: 50%; transform: translateY(-50%); width: min(340px, calc(100% - 32px));
+  background: var(--paper); border-radius: 18px; padding: 22px 22px 20px; box-shadow: 0 0 0 6px var(--wood), 0 0 0 9px var(--wood-dark), 0 22px 40px rgba(20,8,0,.5); animation: rise .35s both;
+  background-image: radial-gradient(rgba(138,90,59,.10) 1px, transparent 1.4px); background-size: 9px 9px; }
+.ask::before, .ask::after { content: ""; position: absolute; top: -26px; width: 2px; height: 20px; background: var(--wood-dark); }
+.ask::before { left: 30px; } .ask::after { right: 30px; }
+.ask h2 { margin: 0 0 6px; font: 400 24px/1.15 var(--font-display); text-wrap: balance; }
+.ask p { margin: 0 0 16px; color: #5a4636; font-size: 14px; }
+.ask .row { display: flex; gap: 10px; flex-wrap: wrap; }
+@media (max-width: 640px) { .ask { top: auto; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); transform: none; right: max(16px, env(safe-area-inset-right, 0px)); width: auto; } }
+
+.btn { border: 0; border-radius: 12px; padding: 11px 16px; font: 700 14px var(--font-body); cursor: pointer; background: var(--paper-2); color: var(--ink); box-shadow: 0 3px 0 var(--wood-dark); transition: transform .1s, box-shadow .1s; }
+.btn:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--wood-dark); }
+.btn.primary { background: var(--amber); }
+.btn.ghost { background: transparent; box-shadow: none; color: var(--paper); border: 2px solid rgba(246,234,210,.55); }
+
+.panel { position: absolute; inset: calc(16px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  margin: auto; max-width: 980px; max-height: 760px; display: flex; flex-direction: column; border-radius: 20px; overflow: hidden;
+  background: linear-gradient(180deg, #6b4630, #4f321f); box-shadow: 0 0 0 4px #2f1d11, 0 30px 60px rgba(0,0,0,.55); animation: rise .35s both; }
+.panel header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; color: var(--paper); border-bottom: 3px solid rgba(0,0,0,.25); }
+.panel header h2 { margin: 0; font: 400 clamp(20px, 3vw, 26px)/1.15 var(--font-display); }
+.panel header p { margin: 2px 0 0; font-size: 13px; opacity: .8; }
+.shelfgrid { overflow: auto; padding: 22px 20px 26px; display: grid; grid-template-columns: repeat(auto-fill, minmax(138px, 1fr)); gap: 26px 18px; align-content: start; }
+.cover-btn { all: unset; box-sizing: border-box; cursor: pointer; display: flex; flex-direction: column; gap: 10px; color: var(--paper); text-align: center; min-width: 0; border-radius: 10px; }
+.cover-btn:focus-visible { outline: 3px solid #fff3c4; outline-offset: 6px; }
+.cover-btn .art { position: relative; aspect-ratio: 2 / 3; background: #e8d8b6; border-radius: 3px 8px 8px 3px; overflow: hidden; box-shadow: 0 10px 0 -2px rgba(0,0,0,.28), 0 16px 22px rgba(0,0,0,.45); transition: transform .2s; }
+.cover-btn:hover .art, .cover-btn:focus-visible .art { transform: translateY(-8px) rotate(-1.5deg); }
+.cover-btn svg, .bigcover svg, .bigcover img, .cover-btn img { display: block; width: 100%; height: 100%; }
+.cover-btn img, .bigcover img, .thumb img { object-fit: contain; background: #e8d8b6; }
+.cover-btn b { font: 400 14.5px/1.25 var(--font-display); overflow-wrap: anywhere; }
+.cover-btn small { display: block; font-size: 12.5px; opacity: .78; margin-top: 2px; overflow-wrap: anywhere; }
+
+.bookview { align-items: stretch; }
+.bookbody { overflow: auto; flex: 1; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 34px 56px; padding: 26px 24px 30px; }
+.bigcover { position: relative; width: min(300px, 62vw); aspect-ratio: 2 / 3; background: #e8d8b6; border-radius: 4px 12px 12px 4px; overflow: hidden; flex: none;
+  box-shadow: 0 14px 0 -3px rgba(0,0,0,.3), 0 30px 40px rgba(0,0,0,.55); transform: rotate(-2deg); animation: rise .5s .05s both; }
+.meta { color: var(--paper); max-width: 360px; min-width: 0; text-align: left; }
+.meta h3 { margin: 0 0 8px; font: 400 clamp(26px, 4vw, 38px)/1.1 var(--font-display); text-wrap: balance; overflow-wrap: anywhere; }
+.meta .by { margin: 0 0 18px; font-size: 18px; opacity: .88; }
+.meta .row { display: flex; gap: 10px; flex-wrap: wrap; }
+
+.hdr-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.iconbtn { all: unset; box-sizing: border-box; flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; cursor: pointer; color: var(--paper); border: 2px solid rgba(246,234,210,.5); }
+.iconbtn:hover { background: rgba(246,234,210,.16); } .iconbtn:focus-visible { outline: 3px solid #fff3c4; outline-offset: 2px; }
+.iconbtn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2.4; stroke-linecap: round; }
+.countbar { padding: 10px 20px 0; color: var(--paper); font-size: 13px; opacity: .85; }
+.toastwrap { padding: 0 20px; }
+.toast { margin-top: 10px; padding: 10px 14px; background: var(--paper); color: var(--ink); border-radius: 10px; font-weight: 600; font-size: 14px; box-shadow: 0 3px 0 var(--wood-dark); animation: rise .3s both; }
+.panel footer { padding: 12px 20px; border-top: 3px solid rgba(0,0,0,.25); display: flex; }
+.searchbar { display: flex; gap: 10px; padding: 16px 20px 6px; }
+.searchbar input { flex: 1; min-width: 0; border: 0; border-radius: 12px; padding: 12px 14px; font: 600 16px var(--font-body); background: var(--paper); color: var(--ink); box-shadow: inset 0 2px 0 rgba(0,0,0,.14); }
+.searchbar input:focus-visible { outline: 3px solid #fff3c4; outline-offset: 2px; }
+.results { overflow: auto; flex: 1; padding: 10px 20px 20px; color: var(--paper); }
+.results ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.result { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 14px; align-items: center; background: rgba(0,0,0,.2); border-radius: 14px; padding: 10px; }
+.thumb { aspect-ratio: 2 / 3; width: 64px; border-radius: 2px 6px 6px 2px; overflow: hidden; background: #e8d8b6; box-shadow: 0 4px 10px rgba(0,0,0,.4); }
+.thumb img, .thumb svg { display: block; width: 100%; height: 100%; }
+.rinfo { min-width: 0; } .rinfo b { display: block; font: 400 17px/1.25 var(--font-display); overflow-wrap: anywhere; }
+.rinfo span { display: block; font-size: 13.5px; opacity: .88; overflow-wrap: anywhere; } .rinfo .rmeta { opacity: .7; font-size: 12.5px; margin-top: 2px; }
+.badge { font-size: 12.5px; font-weight: 700; padding: 6px 10px; border-radius: 999px; background: rgba(246,234,210,.18); }
+.msg { padding: 28px 8px; text-align: center; font-size: 15px; }
+.msg p { margin: 0 0 14px; }
+.facts { margin: 0 0 18px; display: grid; gap: 10px; }
+.facts div { display: grid; gap: 1px; } .facts dt { font-size: 12.5px; opacity: .7; } .facts dd { margin: 0; font-size: 15px; overflow-wrap: anywhere; } .dim { opacity: .6; }
+.meta .note { margin: -6px 0 16px; font-size: 12.5px; opacity: .78; line-height: 1.4; }
+.btn.danger { background: #e6b3a0; color: #4a1a0c; }
+.confirm { background: rgba(0,0,0,.25); border-radius: 14px; padding: 14px; display: grid; gap: 12px; }
+.confirm p { margin: 0; font-size: 15px; }
+.empty .btn { margin-top: 10px; }
+@media (max-width: 520px) { .result { grid-template-columns: 56px minmax(0, 1fr); } .result .btn, .result .badge { grid-column: 1 / -1; justify-self: start; } .thumb { width: 56px; } }
+.empty { color: var(--paper); padding: 40px 24px; text-align: center; grid-column: 1 / -1; }
+
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* welcome */
+.welcome { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; z-index: 5;
+  padding-block: calc(24px + env(safe-area-inset-top, 0px)) calc(24px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px));
+  background: radial-gradient(ellipse 70% 60% at 50% 48%, rgba(31,19,12,.50), rgba(31,19,12,.86) 100%);
+  opacity: 0; transition: opacity .8s ease; color: #f6ead2; }
+.welcome[hidden] { display: none; }
+.welcome.in { opacity: 1; }
+.welcome .inner { max-width: 640px; display: flex; flex-direction: column; align-items: center; gap: 20px; transform: translateY(10px); transition: transform 1s ease; }
+.welcome.in .inner { transform: none; }
+.welcome .orn { width: 64px; height: 1px; background: rgba(246,234,210,.55); position: relative; }
+.welcome .orn::after { content: ""; position: absolute; left: 50%; top: 50%; width: 7px; height: 7px; background: #f2a93b; transform: translate(-50%, -50%) rotate(45deg); }
+.welcome h2 { margin: 0; font: 400 clamp(36px, 7vw, 68px)/1.05 var(--font-display); text-wrap: balance; text-shadow: 0 2px 18px rgba(20,8,0,.6); }
+.welcome p { margin: 0; font: 400 clamp(17px, 2.4vw, 22px)/1.5 Georgia, "Times New Roman", serif; font-style: italic; max-width: 30ch; opacity: .94; text-shadow: 0 1px 10px rgba(20,8,0,.6); text-wrap: balance; }
+.welcome .enter { margin-top: 10px; border: 0; border-radius: 999px; padding: 15px 34px; background: #f6ead2; color: var(--ink); font: 400 18px var(--font-display); cursor: pointer;
+  box-shadow: 0 4px 0 var(--wood-dark), 0 14px 30px rgba(20,8,0,.5); transition: transform .15s, box-shadow .15s, background .2s; }
+.welcome .enter:hover { background: #fff3d6; transform: translateY(-2px); box-shadow: 0 6px 0 var(--wood-dark), 0 18px 34px rgba(20,8,0,.5); }
+.welcome .enter:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--wood-dark); }
+.brand .again { pointer-events: auto; margin-top: 4px; padding: 0; border: 0; background: none; color: var(--paper); font: 600 12.5px var(--font-body); text-decoration: underline; text-underline-offset: 3px; opacity: .8; cursor: pointer; text-shadow: 0 1px 6px rgba(30,12,2,.7); }
+.brand .again:hover { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .welcome, .welcome .inner { transition: none; } }
+
+/* scene animation */
+.spine-lift { transition: transform .18s; }
+#scene.zoomed .spine { cursor: pointer; }
+#scene.zoomed .spine:hover .spine-lift { transform: translateY(-7px); }
+.bob { animation: bob 4s ease-in-out infinite; transform-box: fill-box; }
+@keyframes bob { 50% { transform: translateY(-2px) rotate(3deg); } }
+.blink { animation: blink 4.8s infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes blink { 0%, 95%, 100% { transform: scaleY(1); } 97% { transform: scaleY(.1); } }
+.flame { animation: flicker 3.2s ease-in-out infinite; }
+@keyframes flicker { 0%, 100% { opacity: .9; } 40% { opacity: 1; } 60% { opacity: .82; } }
+.cloud { animation: drift 70s linear infinite alternate; }
+@keyframes drift { to { transform: translateX(140px); } }
+.cat { animation: breathe 3.6s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 100%; }
+@keyframes breathe { 50% { transform: scale(1.025, 1.06); } }
+.mote { animation: mote 14s ease-in-out infinite; }
+@keyframes mote { 0%, 100% { transform: translate(0, 0); opacity: .0; } 20%, 80% { opacity: .75; } 50% { transform: translate(26px, -40px); } }
+.flip { opacity: 0; transform-origin: 448px 490px; animation: flip 9s infinite; }
+@keyframes flip { 0%, 78% { opacity: 0; transform: scaleX(1); } 80% { opacity: 1; transform: scaleX(1); } 91% { opacity: 1; transform: scaleX(-1); } 93%, 100% { opacity: 0; transform: scaleX(-1); } }
+#scene.away .flip { animation: none; opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .bob, .blink, .flame, .cloud, .cat, .mote, .flip, .backdrop, .ask, .panel, .bigcover { animation: none !important; }
+  .mote { opacity: .4; }
+}
+[hidden] { display: none !important; }
+</style>
+
+</head>
+<body>
+<div id="app">
+  <svg id="scene" viewBox="0 0 1200 720" preserveAspectRatio="xMidYMid slice" role="img" aria-label="A cozy reading room. A reader sits at a wooden table with a book and iced coffee. A bookshelf stands at the right holding every book you have read.">
+    <defs>
+      <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e9d6ae"/><stop offset="1" stop-color="#dfc89d"/></linearGradient>
+      <pattern id="paper" width="36" height="36" patternUnits="userSpaceOnUse"><path d="M18 8l6 10-6 10-6-10z" fill="#b8955f" opacity=".12"/></pattern>
+      <pattern id="planks" width="180" height="70" patternUnits="userSpaceOnUse">
+        <rect width="180" height="70" fill="#a76d3f"/><rect y="0" width="90" height="35" fill="#b07745"/><rect x="90" y="35" width="90" height="35" fill="#b07745"/>
+        <path d="M0 35H180M0 0H180M90 0V35M0 35V70M90 35V70M180 35V70" stroke="#6e4326" stroke-width="2" opacity=".55" fill="none"/>
+        <path d="M10 12q30 -4 60 0M110 22q30 4 50 0M20 50q30 4 50 0M120 58q20 -4 50 0" stroke="#8c5733" stroke-width="1.5" fill="none" opacity=".5"/>
+      </pattern>
+      <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f4b66b"/><stop offset=".6" stop-color="#f9d9a0"/><stop offset="1" stop-color="#fbeac4"/></linearGradient>
+      <radialGradient id="sun"><stop offset="0" stop-color="#fffbe6"/><stop offset=".4" stop-color="#ffe9a8" stop-opacity=".9"/><stop offset="1" stop-color="#ffd27a" stop-opacity="0"/></radialGradient>
+      <linearGradient id="shaft" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd58a" stop-opacity=".42"/><stop offset="1" stop-color="#ffd58a" stop-opacity="0"/></linearGradient>
+      <radialGradient id="lampglow" cx=".5" cy="0" r="1"><stop offset="0" stop-color="#ffd27a" stop-opacity=".55"/><stop offset="1" stop-color="#ffd27a" stop-opacity="0"/></radialGradient>
+      <radialGradient id="glowfloor"><stop offset="0" stop-color="#ffd58a" stop-opacity=".5"/><stop offset="1" stop-color="#ffd58a" stop-opacity="0"/></radialGradient>
+      <linearGradient id="coffee" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d9b88c"/><stop offset=".35" stop-color="#a9743f"/><stop offset="1" stop-color="#4a2a17"/></linearGradient>
+      <linearGradient id="woodback" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4a2e1d"/><stop offset="1" stop-color="#5c3a24"/></linearGradient>
+      <linearGradient id="woodframe" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#7a4d31"/><stop offset=".5" stop-color="#946040"/><stop offset="1" stop-color="#7a4d31"/></linearGradient>
+      <linearGradient id="spineShade" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity=".22"/><stop offset=".18" stop-color="#fff" stop-opacity="0"/><stop offset=".8" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".28"/></linearGradient>
+      <clipPath id="winclip"><rect x="200" y="86" width="260" height="240" rx="6"/></clipPath>
+      <filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="8"/></filter>
+    </defs>
+
+    <g id="world">
+      <!-- wall -->
+      <rect x="-200" y="-400" width="1600" height="880" fill="url(#wall)"/>
+      <rect x="-200" y="-400" width="1600" height="880" fill="url(#paper)"/>
+      <!-- wainscot -->
+      <rect x="-200" y="330" width="1600" height="150" fill="#6f8a67"/>
+      <rect x="-200" y="324" width="1600" height="10" fill="#5a3a24"/>
+      <rect x="-200" y="334" width="1600" height="4" fill="#000" opacity=".12"/>
+      <g stroke="#9fb897" stroke-width="2" fill="none" opacity=".7">
+        <rect x="20" y="352" width="140" height="104" rx="3"/><rect x="520" y="352" width="140" height="104" rx="3"/><rect x="670" y="352" width="140" height="104" rx="3"/>
+        <rect x="170" y="352" width="1" height="0"/>
+      </g>
+
+      <!-- window -->
+      <g>
+        <rect x="190" y="76" width="280" height="260" rx="10" fill="#5a3a24"/>
+        <rect x="200" y="86" width="260" height="240" rx="6" fill="url(#sky)"/>
+        <g clip-path="url(#winclip)">
+          <circle cx="360" cy="230" r="90" fill="url(#sun)"/>
+          <circle cx="360" cy="232" r="22" fill="#fff6d2"/>
+          <g class="cloud" fill="#fff6e2" opacity=".85"><ellipse cx="250" cy="140" rx="40" ry="11"/><ellipse cx="280" cy="132" rx="26" ry="10"/><ellipse cx="320" cy="190" rx="30" ry="8"/></g>
+          <path d="M190 270 Q260 215 330 262 T460 245 V330 H190Z" fill="#a9b988"/>
+          <path d="M190 295 Q280 250 370 288 T470 275 V330 H190Z" fill="#7f9b6c"/>
+          <path d="M190 318 Q300 290 470 312 V330 H190Z" fill="#5f7d55"/>
+        </g>
+        <path d="M330 86V326M200 206H460" stroke="#5a3a24" stroke-width="7"/>
+        <rect x="178" y="322" width="304" height="14" rx="4" fill="#7a4d31"/>
+        <!-- sill plants -->
+        <g><rect x="222" y="296" width="30" height="26" rx="4" fill="#c4764a"/><path d="M237 296 Q222 270 214 262 M237 296 Q237 262 240 250 M237 296 Q252 274 262 266" stroke="#4f7a45" stroke-width="5" stroke-linecap="round" fill="none"/>
+        <ellipse cx="214" cy="262" rx="8" ry="5" fill="#5f9150"/><ellipse cx="240" cy="250" rx="8" ry="5" fill="#5f9150"/><ellipse cx="262" cy="266" rx="8" ry="5" fill="#5f9150"/></g>
+        <g><rect x="414" y="302" width="26" height="20" rx="4" fill="#e6d3ae"/><circle cx="427" cy="294" r="12" fill="#6f9a5a"/><circle cx="418" cy="298" r="8" fill="#85b06b"/><circle cx="436" cy="298" r="8" fill="#5f8a4d"/></g>
+      </g>
+      <!-- curtains -->
+      <g fill="#8aa882">
+        <path d="M150 64h58q-8 140 4 280h-62z"/><path d="M452 64h58v280h-62q12 -140 4 -280z"/>
+        <path d="M170 64q-6 140 4 280M190 64q-4 140 2 280M470 64q4 140 -2 280M490 64q6 140 -4 280" stroke="#6f8a67" stroke-width="3" fill="none" opacity=".7"/>
+      </g>
+      <rect x="140" y="56" width="380" height="9" rx="4" fill="#5a3a24"/>
+
+      <!-- wall decor -->
+      <g>
+        <rect x="548" y="140" width="62" height="86" rx="3" fill="#5a3a24"/><rect x="555" y="147" width="48" height="72" fill="#f4e6c6"/>
+        <path d="M555 205 Q570 175 580 195 T603 180 V219 H555Z" fill="#7f9b6c"/><circle cx="586" cy="165" r="8" fill="#e69a3a"/>
+        <rect x="624" y="164" width="54" height="42" rx="3" fill="#5a3a24"/><rect x="630" y="170" width="42" height="30" fill="#e9cf9c"/>
+        <path d="M630 194 L645 180 L655 190 L662 184 L672 194 V200 H630Z" fill="#9b6a43"/>
+        <circle cx="722" cy="150" r="36" fill="#5a3a24"/><circle cx="722" cy="150" r="30" fill="#f6ead2"/>
+        <g stroke="#5a3a24" stroke-width="2" stroke-linecap="round"><path d="M722 124v6M722 170v6M696 150h6M742 150h6"/></g>
+        <line id="hourHand" x1="722" y1="150" x2="722" y2="136" stroke="#2b1c14" stroke-width="4" stroke-linecap="round"/>
+        <line id="minHand" x1="722" y1="150" x2="722" y2="127" stroke="#2b1c14" stroke-width="2.5" stroke-linecap="round"/>
+        <circle cx="722" cy="150" r="3" fill="#b5572f"/>
+      </g>
+
+      <!-- floor -->
+      <rect x="-200" y="478" width="1600" height="400" fill="url(#planks)"/>
+      <rect x="-200" y="470" width="1600" height="16" fill="#4f321f"/>
+      <rect x="-200" y="486" width="1600" height="6" fill="#000" opacity=".18"/>
+      <!-- window light -->
+      <polygon points="200,330 460,330 690,720 400,720" fill="url(#shaft)"/>
+      <polygon points="200,330 250,330 360,720 300,720" fill="#fff" opacity=".05"/>
+      <!-- rugs -->
+      <ellipse cx="340" cy="645" rx="290" ry="52" fill="#9a4a37"/><ellipse cx="340" cy="645" rx="262" ry="43" fill="none" stroke="#f0dcb4" stroke-width="3" opacity=".8"/><ellipse cx="340" cy="645" rx="225" ry="35" fill="#b5593f"/><ellipse cx="340" cy="645" rx="190" ry="28" fill="none" stroke="#e0a860" stroke-width="2" stroke-dasharray="6 8"/>
+      <ellipse cx="1010" cy="660" rx="200" ry="40" fill="#4f6b4a"/><ellipse cx="1010" cy="660" rx="176" ry="32" fill="none" stroke="#e8d6a8" stroke-width="3" opacity=".7"/>
+
+      <!-- left chair + cat -->
+      <g>
+        <rect x="72" y="418" width="14" height="130" rx="6" fill="#6b4328"/>
+        <rect x="92" y="548" width="10" height="44" fill="#4f321f"/><rect x="132" y="548" width="10" height="44" fill="#4f321f"/>
+        <rect x="68" y="536" width="86" height="16" rx="7" fill="#7a4d31"/>
+        <g class="cat">
+          <ellipse cx="112" cy="520" rx="32" ry="17" fill="#d99a52"/>
+          <circle cx="86" cy="512" r="14" fill="#d99a52"/>
+          <path d="M76 502l2 -12 8 7zM92 499l8 -9 3 11z" fill="#d99a52"/>
+          <path d="M82 513q3 3 6 0M90 513q3 3 6 0" stroke="#4a2a17" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+          <path d="M138 524q14 -2 10 -14" stroke="#d99a52" stroke-width="8" stroke-linecap="round" fill="none"/>
+          <path d="M100 506q6 -4 12 0M116 506q6 -4 12 0" stroke="#b97830" stroke-width="3" stroke-linecap="round" fill="none"/>
+        </g>
+      </g>
+
+      <!-- pendant lamp + light cone -->
+      <polygon points="300,196 380,196 560,590 120,590" fill="url(#lampglow)" opacity=".7" class="flame"/>
+      <line x1="340" y1="-400" x2="340" y2="168" stroke="#2b1c14" stroke-width="3"/>
+      <path d="M296 202 Q300 160 340 160 Q380 160 384 202Z" fill="#c4764a"/>
+      <ellipse cx="340" cy="202" rx="44" ry="7" fill="#ffe3a1"/>
+      <circle cx="340" cy="206" r="10" fill="#fff4cc" class="flame"/>
+      <ellipse cx="340" cy="498" rx="170" ry="26" fill="url(#glowfloor)" class="flame"/>
+
+      <!-- table -->
+      <ellipse cx="335" cy="596" rx="210" ry="13" fill="#2b1c14" opacity=".28"/>
+      <rect x="198" y="505" width="14" height="82" fill="#4f321f"/><rect x="448" y="505" width="14" height="82" fill="#4f321f"/>
+      <rect x="170" y="520" width="20" height="70" rx="3" fill="#6b4328"/><rect x="472" y="520" width="20" height="70" rx="3" fill="#6b4328"/>
+      <rect x="156" y="502" width="348" height="22" rx="4" fill="#7a4d31"/>
+      <polygon points="172,478 488,478 510,502 150,502" fill="#a76d3f"/>
+      <path d="M180 488h120M260 494h160M200 484h60M360 484h110" stroke="#8c5733" stroke-width="1.6" opacity=".6"/>
+      <rect x="150" y="499" width="360" height="5" rx="2" fill="#c08550"/>
+
+      <!-- iced coffee -->
+      <g>
+        <ellipse cx="252" cy="496" rx="26" ry="6" fill="#2b1c14" opacity=".3"/>
+        <ellipse cx="252" cy="494" rx="22" ry="5.5" fill="#e6d3ae"/>
+        <path d="M236 444h32l-4 50h-24z" fill="#dff0f2" opacity=".35"/>
+        <path d="M237 456h30l-3 38h-24z" fill="url(#coffee)"/>
+        <path d="M237 456q15 6 30 0" stroke="#f3e2c3" stroke-width="2" fill="none" opacity=".8"/>
+        <g class="bob" fill="#fff" opacity=".6"><rect x="241" y="458" width="10" height="9" rx="2.5" transform="rotate(-12 246 462)"/><rect x="253" y="462" width="10" height="9" rx="2.5" transform="rotate(10 258 466)"/></g>
+        <path d="M236 444h32l-4 50h-24z" fill="none" stroke="#fff" stroke-width="1.6" opacity=".6"/>
+        <path d="M241 448v36" stroke="#fff" stroke-width="2" opacity=".5" stroke-linecap="round"/>
+        <path d="M262 420 L254 488" stroke="#e8c27a" stroke-width="3.5" stroke-linecap="round"/><path d="M262 420 l-1 -6" stroke="#e8c27a" stroke-width="3.5" stroke-linecap="round"/>
+        <g fill="#fff" opacity=".7"><circle cx="262" cy="470" r="1.6"/><circle cx="244" cy="484" r="1.4"/><circle cx="258" cy="488" r="1.4"/></g>
+      </g>
+      <!-- succulent -->
+      <g><rect x="318" y="476" width="24" height="20" rx="4" fill="#e6d3ae"/><path d="M330 478q-18 -8 -16 -22q14 2 16 22zM330 478q18 -8 16 -22q-14 2 -16 22zM330 478q-2 -16 0 -26q4 12 0 26z" fill="#6f9a5a"/></g>
+      <!-- open book -->
+      <g>
+        <polygon points="396,486 500,486 506,502 390,502" fill="#7d2e3b"/>
+        <polygon points="400,480 446,483 446,497 396,495" fill="#f6ead2"/>
+        <polygon points="450,483 498,480 502,495 450,497" fill="#f1e2c4"/>
+        <path d="M448 483v14" stroke="#c9b68e" stroke-width="2"/>
+        <g stroke="#b9a37a" stroke-width="1.2"><path d="M406 486l34 1.5M406 489.5l34 1.5M406 493l34 1.5M456 487l38 -1.5M456 490.5l38 -1.5M456 494l38 -1.5"/></g>
+        <polygon class="flip" points="450,483 498,480 502,495 450,497" fill="#e8d4aa"/>
+      </g>
+
+      <!-- right chair -->
+      <g>
+        <rect x="578" y="410" width="16" height="142" rx="7" fill="#6b4328"/>
+        <rect x="520" y="548" width="10" height="44" fill="#4f321f"/><rect x="574" y="548" width="10" height="44" fill="#4f321f"/>
+        <rect x="514" y="538" width="86" height="16" rx="7" fill="#7a4d31"/>
+      </g>
+
+      <!-- floor lamp + big plant -->
+      <g>
+        <ellipse cx="735" cy="592" rx="24" ry="5" fill="#2b1c14" opacity=".3"/>
+        <rect x="732" y="380" width="6" height="210" fill="#3a2418"/><ellipse cx="735" cy="590" rx="18" ry="5" fill="#3a2418"/>
+        <path d="M708 392 L716 336 H754 L762 392Z" fill="#f1d9a0"/><ellipse cx="735" cy="392" rx="27" ry="5" fill="#ffe9ae"/>
+        <ellipse cx="735" cy="420" rx="70" ry="90" fill="#ffd27a" opacity=".12" filter="url(#soft)"/>
+      </g>
+      <g>
+        <ellipse cx="660" cy="594" rx="38" ry="8" fill="#2b1c14" opacity=".3"/>
+        <path d="M626 548h68l-8 44h-52z" fill="#c4764a"/><rect x="622" y="542" width="76" height="12" rx="4" fill="#d58a5a"/>
+        <g fill="#4f7a45"><path d="M660 545Q620 520 612 470 Q648 480 660 545z"/><path d="M660 545Q700 520 710 466 Q672 476 660 545z"/><path d="M660 545Q640 490 650 430 Q676 470 660 545z"/><path d="M660 545Q690 500 682 440 Q652 480 660 545z"/></g>
+        <g fill="#6aa05a"><path d="M660 545Q632 515 636 480 Q656 500 660 545z"/><path d="M660 545Q690 520 694 484 Q668 500 660 545z"/></g>
+      </g>
+
+      <!-- shelf (generated) -->
+      <g id="shelf"></g>
+
+      <!-- character -->
+      <g id="char">
+        <ellipse cx="0" cy="2" rx="30" ry="7" fill="#2b1c14" opacity=".3"/>
+        <g id="pStand">
+          <g transform="translate(-9,-72)"><g id="legL"><rect x="-7" y="0" width="14" height="56" rx="6" fill="#3f4f6b"/><path d="M-10 54h17a4 4 0 0 1 4 8v3h-23z" fill="#2b1c14"/></g></g>
+          <g transform="translate(9,-72)"><g id="legR"><rect x="-7" y="0" width="14" height="56" rx="6" fill="#3a4863"/><path d="M-10 54h17a4 4 0 0 1 4 8v3h-23z" fill="#2b1c14"/></g></g>
+          <g transform="translate(24,-132)"><g id="armR"><rect x="-6" y="-2" width="12" height="48" rx="6" fill="#a8532d"/><circle cx="0" cy="48" r="6.5" fill="#f0c9a0"/></g></g>
+          <rect x="-24" y="-146" width="48" height="80" rx="17" fill="#c9693c"/>
+          <rect x="-24" y="-108" width="48" height="8" fill="#e6b077" opacity=".75"/>
+          <rect x="-24" y="-92" width="48" height="8" fill="#e6b077" opacity=".75"/>
+          <g transform="translate(-24,-132)"><g id="armL"><rect x="-6" y="-2" width="12" height="48" rx="6" fill="#c9693c"/><circle cx="0" cy="48" r="6.5" fill="#f0c9a0"/></g></g>
+          <g id="headStand" transform="translate(0,-168)"></g>
+        </g>
+        <g id="pSit" opacity="0">
+          <path d="M-4 -118 L-26 -94 L-62 -89" stroke="#a8532d" stroke-width="11" stroke-linecap="round" stroke-linejoin="round" fill="none"/><circle cx="-63" cy="-89" r="6" fill="#e6b995"/>
+          <path d="M2 -58 L-46 -62 L-48 -12" stroke="#3f4f6b" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <path d="M-60 -15 h14 a4 4 0 0 1 4 8 v3 h-22z" fill="#2b1c14" transform="translate(4,6)"/>
+          <g id="sitBody"><rect x="-26" y="-128" width="40" height="72" rx="15" fill="#c9693c" transform="rotate(-5 0 -60)"/>
+          <rect x="-22" y="-100" width="36" height="7" fill="#e6b077" opacity=".75" transform="rotate(-5 0 -60)"/><rect x="-22" y="-84" width="36" height="7" fill="#e6b077" opacity=".75" transform="rotate(-5 0 -60)"/></g>
+          <path d="M-8 -116 L-34 -96 L-72 -92" stroke="#c9693c" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" fill="none"/><circle cx="-73" cy="-92" r="6.5" fill="#f0c9a0"/>
+          <g id="headSit" transform="translate(-16,-158) rotate(10)"></g>
+        </g>
+      </g>
+
+      <!-- dust in the light -->
+      <g fill="#fff3c4">
+        <circle class="mote" cx="300" cy="380" r="2.4" style="animation-delay:-2s"/><circle class="mote" cx="380" cy="430" r="1.8" style="animation-delay:-6s"/><circle class="mote" cx="450" cy="360" r="2.2" style="animation-delay:-9s"/>
+        <circle class="mote" cx="520" cy="470" r="1.6" style="animation-delay:-4s"/><circle class="mote" cx="250" cy="450" r="1.8" style="animation-delay:-11s"/><circle class="mote" cx="560" cy="400" r="2" style="animation-delay:-7s"/>
+        <circle class="mote" cx="620" cy="520" r="1.6" style="animation-delay:-1s"/><circle class="mote" cx="330" cy="560" r="1.8" style="animation-delay:-8s"/>
+      </g>
+    </g>
+  </svg>
+  <div class="vignette"></div>
+
+  <div class="hud">
+    <div class="brand"><h1>The Reading Nook</h1><p id="count"></p><button class="again" id="againBtn" type="button">Revisit welcome</button></div>
+    <div class="hud-bottom">
+      <div class="dpad" role="group" aria-label="Movement controls">
+        <button class="up" data-dir="up" aria-label="Walk up"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6l8 10H4z"/></svg></button>
+        <button class="left" data-dir="left" aria-label="Walk left"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12l10-8v16z"/></svg></button>
+        <button class="act" id="actBtn" aria-label="Interact">E</button>
+        <button class="right" data-dir="right" aria-label="Walk right"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 12L8 20V4z"/></svg></button>
+        <button class="down" data-dir="down" aria-label="Walk down"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 18L4 8h16z"/></svg></button>
+      </div>
+      <div class="keys"><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or arrow keys to walk</span><span><kbd>E</kbd> to interact &nbsp; <kbd>Esc</kbd> to close</span><span>or click the floor to walk there</span></div>
+    </div>
+  </div>
+  <button class="prompt" id="prompt" type="button"></button>
+  <div class="sr" id="live" aria-live="polite"></div>
+
+  <div class="layer" id="layer"></div>
+  <section class="welcome" id="welcome" role="dialog" aria-modal="true" aria-labelledby="wlT" aria-describedby="wlP" hidden>
+    <div class="inner">
+      <span class="orn" aria-hidden="true"></span>
+      <h2 id="wlT">Welcome to The Reading Nook</h2>
+      <p id="wlP">Your little corner of the world, where every book holds a story.</p>
+      <button class="enter" id="enterBtn" type="button">Enter My Nook</button>
+    </div>
+  </section>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  /* ---------- Helpers ---------- */
+  const $ = (s, r = document) => r.querySelector(s);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const smooth = (t) => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
+  const lum = (hex) => { const n = parseInt(hex.slice(1), 16); const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255; return (0.299 * r + 0.587 * g + 0.114 * b) / 255; };
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const coarse = matchMedia('(pointer: coarse)').matches;
+  let uid = 0;
+
+  function wrapText(str, maxChars, maxLines) {
+    const words = str.split(/\s+/); const lines = []; let cur = '';
+    for (const w of words) {
+      if (!cur) cur = w; else if ((cur + ' ' + w).length <= maxChars) cur += ' ' + w; else { lines.push(cur); cur = w; }
+    }
+    if (cur) lines.push(cur);
+    if (lines.length > maxLines) {
+      const keep = lines.slice(0, maxLines);
+      keep[maxLines - 1] = keep[maxLines - 1].slice(0, Math.max(1, maxChars - 1)) + '…';
+      return keep;
+    }
+    return lines;
+  }
+
+  /* ---------- Book data ----------
+     The starter shelf is loaded from books.json (published beside this page); EMBEDDED_SEED is a copy used only if
+     that file cannot be fetched (for example when the page is opened straight from disk). The seed is copied into
+     the visitor's own library in localStorage once, on first visit. After that the stored library is the only source.
+     Fields that the catalogue could not confirm are null in the data; they are never guessed. */
+  const OL_COVER = (id, size = 'L') => `https://covers.openlibrary.org/b/id/${id}-${size}.jpg?default=false`;
+  const OL_ISBN = (isbn, size = 'L') => `https://covers.openlibrary.org/b/isbn/${isbn}-${size}.jpg?default=false`; // 404s when there is no cover
+  const SAFE_COVER = /^(https:\/\/covers\.openlibrary\.org\/|covers\/)/; // stored data is untrusted: only these image sources are used
+  const SPINE_COLORS = ['#7a4e8c', '#3f6b8c', '#9a5b3c', '#5b7a4a', '#a33f4a', '#c79a3b', '#4a5568', '#7b3f61'];
+  const EMBEDDED_SEED = {"version": 1, "note": "Starter shelf. ISBNs were matched to titles and authors in retailer and library listings. Open Library could not be queried when this file was written, so coverId, firstPublishYear, edition and workKey are null rather than guessed. Cover URLs point at the Open Library Covers API by ISBN and were not fetched.", "books": [{"id": "atomic-habits", "title": "Atomic Habits", "authors": ["James Clear"], "isbn": "9780735211292", "coverId": null, "firstPublishYear": null, "edition": null, "workKey": null, "editionKey": null, "coverUrl": "https://covers.openlibrary.org/b/isbn/9780735211292-L.jpg?default=false", "source": "starter", "verification": {"titleAuthorIsbn": "matched in retailer and library listings", "openLibrary": "not queried", "cover": "not fetched"}, "spine": {"color": "#d9b24a"}}, {"id": "silent-patient", "title": "The Silent Patient", "authors": ["Alex Michaelides"], "isbn": "9781250301697", "coverId": null, "firstPublishYear": null, "edition": null, "workKey": null, "editionKey": null, "coverUrl": "https://covers.openlibrary.org/b/isbn/9781250301697-L.jpg?default=false", "source": "starter", "verification": {"titleAuthorIsbn": "matched in retailer and library listings", "openLibrary": "not queried", "cover": "not fetched"}, "spine": {"color": "#1d2a44"}}, {"id": "ikigai", "title": "Ikigai", "authors": ["Héctor García", "Francesc Miralles"], "isbn": "9780143130727", "coverId": null, "firstPublishYear": null, "edition": null, "workKey": null, "editionKey": null, "coverUrl": "https://covers.openlibrary.org/b/isbn/9780143130727-L.jpg?default=false", "source": "starter", "verification": {"titleAuthorIsbn": "matched in retailer and library listings", "openLibrary": "not queried", "cover": "not fetched"}, "spine": {"color": "#c2495a"}}, {"id": "psychology-of-money", "title": "The Psychology of Money", "authors": ["Morgan Housel"], "isbn": "9780857197689", "coverId": null, "firstPublishYear": null, "edition": null, "workKey": null, "editionKey": null, "coverUrl": "https://covers.openlibrary.org/b/isbn/9780857197689-L.jpg?default=false", "source": "starter", "verification": {"titleAuthorIsbn": "matched in retailer and library listings", "openLibrary": "not queried", "cover": "not fetched"}, "spine": {"color": "#2f5d45"}}, {"id": "the-alchemist", "title": "The Alchemist", "authors": ["Paulo Coelho"], "isbn": "9780062315007", "coverId": null, "firstPublishYear": null, "edition": null, "workKey": null, "editionKey": null, "coverUrl": "https://covers.openlibrary.org/b/isbn/9780062315007-L.jpg?default=false", "source": "starter", "verification": {"titleAuthorIsbn": "matched in retailer and library listings", "openLibrary": "not queried", "cover": "not fetched"}, "spine": {"color": "#b9622f"}}]};
+
+  /* Fills derived fields from a stored record: author line, ordered cover sources, spine colour. */
+  function normalize(b) {
+    const authors = Array.isArray(b.authors) ? b.authors.filter((a) => typeof a === 'string' && a) : (b.author ? [String(b.author)] : []);
+    const isbn = b.isbn ? String(b.isbn) : null, coverId = b.coverId ? String(b.coverId) : null;
+    const local = b.localCover || (b.source === 'starter' ? `covers/${b.id}.jpg` : null); // optional local image beside the page
+    const raw = [local, b.coverUrl, coverId ? OL_COVER(coverId) : null, isbn ? OL_ISBN(isbn) : null];
+    const sources = raw.filter((u, i) => u && SAFE_COVER.test(u) && raw.indexOf(u) === i);
+    const spine = Object.assign({ color: SPINE_COLORS[hash(String(b.id)) % SPINE_COLORS.length] }, b.spine);
+    return Object.assign({}, b, { title: String(b.title), authors, author: authors.join(' and '), isbn, coverId, coverSources: sources, coverUrl: sources[0] || null, spine });
+  }
+  const toRecord = (b) => { const r = Object.assign({}, b); delete r.coverSources; delete r.author; return r; };
+  const validBook = (x) => !!x && typeof x === 'object' && typeof x.id === 'string' && x.id !== '' && typeof x.title === 'string' && x.title.trim() !== '';
+
+  /* ---------- Placeholder cover ----------
+     Used only when no real cover is available or the image fails to load. Plain type on paper,
+     with the book's spine colour as the binding. Carries nothing but the correct title and author. */
+  function coverSVG(b) {
+    const col = (b.spine && b.spine.color) || '#8a5a3b';
+    const fs = b.title.length > 20 ? 25 : b.title.length > 12 ? 29 : 33;
+    const tl = wrapText(b.title, Math.floor(220 / (fs * 0.52)), 4);
+    const au = wrapText(b.author, 20, 3);
+    const y0 = 200 - (tl.length - 1) * fs * 0.55;
+    const t = tl.map((l, i) => `<text x="160" y="${(y0 + i * fs * 1.15).toFixed(1)}" text-anchor="middle" font-size="${fs}" font-family="'Young Serif',Georgia,serif" fill="#2b1c14">${esc(l)}</text>`).join('');
+    const a = au.map((l, i) => `<text x="160" y="${(y0 + tl.length * fs * 1.15 + 18 + i * 17).toFixed(1)}" text-anchor="middle" font-size="12" letter-spacing="1" font-family="'Figtree',system-ui,sans-serif" font-weight="700" fill="#5a4636">${esc(l.toUpperCase())}</text>`).join('');
+    return `<svg viewBox="0 0 300 450" role="img" aria-label="${esc(b.title)} by ${esc(b.author)} (cover image unavailable)" xmlns="http://www.w3.org/2000/svg">
+      <rect width="300" height="450" fill="#efe2c8"/><rect width="26" height="450" fill="${col}"/><rect x="26" width="3" height="450" fill="#000" opacity=".15"/>
+      <rect x="44" y="18" width="238" height="414" fill="none" stroke="#8a5a3b" stroke-width="1.4" stroke-dasharray="7 5" opacity=".65"/>
+      <g transform="translate(-10,0)">${t}${a}</g>
+      <text x="160" y="418" text-anchor="middle" font-size="10.5" font-family="'Figtree',system-ui,sans-serif" fill="#8a7358">Cover image unavailable</text></svg>`;
+  }
+
+  /* A real cover is shown whenever the book has a URL; if it fails to load, the placeholder replaces it. */
+  function coverHTML(b) {
+    if (b.coverUrl) {
+      return `<img src="${esc(b.coverSources[0])}" data-i="0" alt="Cover of ${esc(b.title)} by ${esc(b.author)}" data-fallback="${esc(b.id)}" referrerpolicy="no-referrer">`;
+    }
+    return coverSVG(b);
+  }
+  function wireCoverFallback(root, getBook) {
+    root.querySelectorAll('img[data-fallback]').forEach((img) => {
+      const swap = () => { const b = getBook(img.dataset.fallback); if (!b || !img.isConnected) return;
+        const i = +img.dataset.i + 1; if (b.coverSources && i < b.coverSources.length) { img.dataset.i = i; img.src = b.coverSources[i]; return; } // next source
+        const t = document.createElement('div'); t.innerHTML = coverSVG(b); img.replaceWith(t.firstElementChild); };
+      img.addEventListener('error', swap);
+      img.addEventListener('load', () => { if (img.naturalWidth < 20) swap(); }); // Open Library can answer with a 1x1 image
+      if (img.complete && img.naturalWidth === 0) swap();
+    });
+  }
+
+  /* Colour a spine from its real cover when the browser lets us read the pixels; otherwise keep the configured colour. */
+  function tintSpine(b) {
+    if (b.spine && b.spine.locked) return;
+    const c = b.coverSources || []; let i = 0;
+    const next = () => {
+      if (i >= c.length) return;
+      const im = new Image(); im.crossOrigin = 'anonymous';
+      im.onload = () => {
+        try {
+          if (im.naturalWidth < 20) throw new Error('empty');
+          const cv = document.createElement('canvas'); cv.width = 24; cv.height = 36;
+          const cx = cv.getContext('2d'); cx.drawImage(im, 0, 0, 24, 36);
+          const d = cx.getImageData(0, 0, 24, 36).data; let r = 0, g = 0, bl = 0, w8 = 0;
+          for (let p = 0; p < d.length; p += 4) {
+            const w = 0.15 + (Math.max(d[p], d[p + 1], d[p + 2]) - Math.min(d[p], d[p + 1], d[p + 2])) / 255;
+            r += d[p] * w; g += d[p + 1] * w; bl += d[p + 2] * w; w8 += w;
+          }
+          const h = (v) => Math.round(clamp(v / w8, 0, 255)).toString(16).padStart(2, '0');
+          b.spine.color = '#' + h(r) + h(g) + h(bl); renderShelf();
+        } catch (_) { /* tainted canvas or empty image */ }
+      };
+      im.onerror = () => { i++; next(); };
+      im.src = c[i];
+    };
+    next();
+  }
+
+  /* ---------- Collection store ---------- */
+  let books = []; let libraryReady = false;
+  const getBook = (id) => books.find((b) => b.id === id);
+
+  /* ---------- Persistence (this browser only; it does not sync between devices) ---------- */
+  const LIB_KEY = 'readingNook.library.v1';
+  function saveLibrary() {
+    try { localStorage.setItem(LIB_KEY, JSON.stringify({ version: 1, savedAt: Date.now(), books: books.map(toRecord) })); return true; } catch (_) { return false; }
+  }
+  /* Returns the stored list, or null when nothing usable is stored. A corrupt value is kept under a .corrupt key, never silently destroyed. */
+  function readLibrary() {
+    let raw; try { raw = localStorage.getItem(LIB_KEY); } catch (_) { return null; }
+    if (raw === null) return null;
+    try {
+      const d = JSON.parse(raw);
+      const arr = Array.isArray(d) ? d : (d && Array.isArray(d.books) ? d.books : null);
+      if (!arr) throw new Error('unexpected shape');
+      const seenIds = new Set(); const list = [];
+      for (const x of arr) { if (validBook(x) && !seenIds.has(x.id)) { seenIds.add(x.id); list.push(x); } }
+      if (arr.length && !list.length) throw new Error('no valid books');
+      return list;
+    } catch (_) { try { localStorage.setItem(LIB_KEY + '.corrupt', raw); } catch (__) {} return null; }
+  }
+  async function loadSeed() {
+    try {
+      const r = await fetch('books.json', { cache: 'no-cache' }); if (!r.ok) throw new Error('http ' + r.status);
+      const d = await r.json(); const arr = (d && d.books) || d;
+      if (Array.isArray(arr) && arr.some(validBook)) return arr.filter(validBook);
+    } catch (_) { /* fall back to the embedded copy */ }
+    return EMBEDDED_SEED.books;
+  }
+  async function initLibrary() {
+    const stored = readLibrary();
+    if (stored) books = stored.map(normalize);
+    else { books = (await loadSeed()).map(normalize); saveLibrary(); }
+    libraryReady = true; renderShelf(); books.forEach(tintSpine);
+  }
+
+  /* ---------- Duplicate detection ---------- */
+  const plain = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\(.*?\)/g, ' ').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+  const plainTitle = (s) => plain(s).replace(/^(the|a|an) /, '');
+  function findDuplicate(rec) {
+    return books.find((b) => b.id === rec.id
+      || (rec.isbn && b.isbn === rec.isbn)
+      || (rec.workKey && b.workKey === rec.workKey)
+      || (plainTitle(b.title) === plainTitle(rec.title)
+          && (!rec.authors.length || !b.authors.length || b.authors.some((a) => rec.authors.some((c) => plain(a) === plain(c))))));
+  }
+
+  /* ---------- Shelf geometry + rendering ---------- */
+  const SHELF = { x0: 850, w: 320, base: 592, plinth: 12, row: 104, board: 10, crown: 22, side: 16 };
+  const MAX_ROWS = 5, MIN_ROWS = 3;
+  let shelfInfo = { top: 220, rows: 3 };
+
+  function spineSpec(b, k) {
+    const h = hash(b.id);
+    const len = b.title.length;
+    const w = clamp((26 + Math.min(14, len * 0.6) + (h % 6)) * k, 20, 48);
+    const ht = 90 + ((h >> 3) % 10);
+    return { w, h: ht };
+  }
+  function packRows(list, k) {
+    const inner = SHELF.w - SHELF.side * 2 - 16; const rows = [[]]; let x = 0;
+    for (const b of list) {
+      const s = spineSpec(b, k);
+      if (x + s.w > inner && rows[rows.length - 1].length) { rows.push([]); x = 0; }
+      rows[rows.length - 1].push({ b, s }); x += s.w + 1.5;
+    }
+    return rows;
+  }
+  const DECOR = [
+    (x, y) => `<g transform="translate(${x},${y})"><path d="M0 -2h30l-4 -24h-22z" fill="#c4764a"/><path d="M15 -26Q2 -44 -4 -52M15 -26Q16 -50 18 -60M15 -26Q30 -44 38 -50" stroke="#4f7a45" stroke-width="4.5" fill="none" stroke-linecap="round"/><circle cx="-4" cy="-52" r="6" fill="#6aa05a"/><circle cx="18" cy="-60" r="6" fill="#6aa05a"/><circle cx="38" cy="-50" r="6" fill="#6aa05a"/></g>`,
+    (x, y) => `<g transform="translate(${x},${y})"><rect x="0" y="-52" width="44" height="52" rx="3" fill="#5a3a24"/><rect x="5" y="-47" width="34" height="42" fill="#f4e6c6"/><path d="M5 -14Q16 -34 24 -22T39 -30V-5H5Z" fill="#7f9b6c"/><circle cx="29" cy="-38" r="5" fill="#e69a3a"/><path d="M12 0l10 -8M32 0l-10 -8" stroke="#5a3a24" stroke-width="3"/></g>`,
+    (x, y) => `<g transform="translate(${x},${y})"><path d="M2 0h26v-34q0 -8 -6 -10h-14q-6 2 -6 10z" fill="#e6d3ae"/><path d="M15 -44Q8 -64 2 -70M15 -44Q16 -70 18 -78M15 -44Q26 -62 32 -68" stroke="#b9873a" stroke-width="2.5" fill="none"/><circle cx="2" cy="-70" r="4" fill="#e8b04a"/><circle cx="18" cy="-78" r="4" fill="#c2495a"/><circle cx="32" cy="-68" r="4" fill="#e8b04a"/></g>`,
+  ];
+
+  function renderShelf() {
+    const list = books.slice();
+    let k = 1, rows = packRows(list, k);
+    while (rows.length > MAX_ROWS && k > 0.5) { k -= 0.06; rows = packRows(list, k); }
+    const rowCount = clamp(rows.length, MIN_ROWS, MAX_ROWS);
+    const hiddenCount = rows.slice(MAX_ROWS).reduce((n, r) => n + r.length, 0);
+    const rowBottom = (i) => SHELF.base - SHELF.plinth - SHELF.board - i * (SHELF.row + SHELF.board);
+    const top = rowBottom(rowCount - 1) - SHELF.row - SHELF.crown;
+    shelfInfo = { top, rows: rowCount };
+    const { x0, w, side } = SHELF;
+    const ix = x0 + side;
+    let s = '';
+    // cabinet
+    s += `<ellipse cx="${x0 + w / 2}" cy="${SHELF.base + 2}" rx="${w / 2 + 14}" ry="9" fill="#2b1c14" opacity=".3"/>`;
+    s += `<rect x="${x0}" y="${top}" width="${w}" height="${SHELF.base - top}" rx="6" fill="url(#woodframe)"/>`;
+    s += `<rect x="${ix}" y="${top + SHELF.crown}" width="${w - side * 2}" height="${SHELF.base - top - SHELF.crown - SHELF.plinth}" fill="url(#woodback)"/>`;
+    s += `<rect x="${x0 - 8}" y="${top - 8}" width="${w + 16}" height="${SHELF.crown}" rx="5" fill="#6b4328"/><rect x="${x0 - 8}" y="${top - 8}" width="${w + 16}" height="5" rx="2" fill="#a06b44"/>`;
+    s += `<text x="${x0 + w / 2}" y="${top + 8}" text-anchor="middle" font-family="'Young Serif',Georgia,serif" font-size="13" letter-spacing="3" fill="#f0d9a8">${hiddenCount ? `READ SHELF · +${hiddenCount} IN THE LIBRARY` : 'READ SHELF'}</text>`;
+    s += `<rect x="${x0 - 4}" y="${SHELF.base - SHELF.plinth}" width="${w + 8}" height="${SHELF.plinth}" fill="#4f321f"/>`;
+    // shelf boards + row contents (row 0 is the bottom row)
+    for (let i = 0; i < rowCount; i++) {
+      const rb = rowBottom(i);
+      s += `<rect x="${ix - 2}" y="${rb}" width="${w - side * 2 + 4}" height="${SHELF.board}" fill="#8a5a3b"/><rect x="${ix - 2}" y="${rb}" width="${w - side * 2 + 4}" height="3" fill="#b27c52"/>`;
+      s += `<rect x="${ix}" y="${rb - SHELF.row}" width="${w - side * 2}" height="10" fill="#000" opacity=".16"/>`;
+      const row = rows[i] && rows[i].length ? rows[i] : null;
+      if (!row) {
+        if (i === 0 && libraryReady && list.length === 0) {
+          s += `<g transform="translate(${ix + 24},${rb - 70})"><rect width="228" height="58" rx="6" fill="#f1e3c4" stroke="#8a5a3b" stroke-width="1.5" stroke-dasharray="6 4"/>
+            <text x="114" y="24" text-anchor="middle" font-family="'Young Serif',Georgia,serif" font-size="14" fill="#2b1c14">Your shelf is empty</text>
+            <text x="114" y="43" text-anchor="middle" font-family="'Figtree',system-ui,sans-serif" font-size="11.5" fill="#5a4636">${coarse ? 'Tap the shelf prompt' : 'Press E here'} to add a book</text></g>`;
+        } else s += DECOR[(i + 1) % DECOR.length](ix + 190 - ((i * 37) % 70), rb);
+        continue;
+      }
+      let x = ix + 8;
+      for (const { b, s: sp } of row) {
+        const col = (b.spine && b.spine.color) || '#8a5a3b';
+        const dark = lum(col) < 0.55;
+        const txt = dark ? '#f6ead2' : '#2b1c14';
+        const lines = sp.w >= 40 ? 3 : sp.w >= 32 ? 2 : 1;
+        const fs = lines > 1 ? 10.5 : 11.5;
+        const maxC = Math.floor((sp.h - 20) / (fs * 0.47));
+        const tl = wrapText(b.title, maxC, lines);
+        const lh = fs + 1.5;
+        const tt = tl.map((l, j) => `<text transform="translate(${sp.w / 2},${sp.h / 2 + 1}) rotate(90)" x="0" y="${(j - (tl.length - 1) / 2) * lh + fs * 0.35}" text-anchor="middle" font-family="'Barlow Condensed','Arial Narrow',Impact,sans-serif" font-weight="700" font-size="${fs}" letter-spacing=".6" fill="${txt}">${esc(l)}</text>`).join('');
+        s += `<g class="spine" data-id="${esc(b.id)}" transform="translate(${x.toFixed(1)},${rb - sp.h})"><g class="spine-lift"><title>${esc(b.title)} by ${esc(b.author)}</title>
+          <rect width="${sp.w}" height="${sp.h}" rx="2" fill="${col}"/>
+          <rect y="6" width="${sp.w}" height="3" fill="${txt}" opacity=".5"/><rect y="${sp.h - 9}" width="${sp.w}" height="3" fill="${txt}" opacity=".5"/>
+          <circle cx="${sp.w / 2}" cy="${sp.h - 17}" r="2.2" fill="${txt}" opacity=".55"/>
+          <rect width="${sp.w}" height="${sp.h}" rx="2" fill="url(#spineShade)"/>${tt}</g></g>`;
+        x += sp.w + 1.5;
+      }
+      // small bookend after the last book of the row
+      s += `<rect x="${x + 2}" y="${rb - 30}" width="6" height="30" rx="1.5" fill="#c9a46a"/>`;
+    }
+    // sides over the content edges
+    s += `<rect x="${x0}" y="${top}" width="${side}" height="${SHELF.base - top}" rx="4" fill="#7a4d31"/><rect x="${x0 + w - side}" y="${top}" width="${side}" height="${SHELF.base - top}" rx="4" fill="#6b4328"/>`;
+    // decoration on top of the cabinet
+    s += DECOR[0](x0 + w - 70, top - 8);
+    $('#shelf').innerHTML = s;
+    $('#count').textContent = books.length === 0 ? 'Your shelf is waiting for its first book' : books.length === 1 ? '1 book on the shelf' : `${books.length} books on the shelf`;
+  }
+
+  /* ---------- Character ---------- */
+  const HEAD = `<ellipse cx="0" cy="-2" rx="29" ry="27" fill="#3a2418"/><rect x="-29" y="-4" width="58" height="34" rx="14" fill="#3a2418"/>
+    <circle cx="0" cy="0" r="25" fill="#f0c9a0"/>
+    <path d="M-27 -2Q-26 -30 0 -30Q27 -30 27 -2Q20 -14 6 -18Q-6 -12 -27 -2Z" fill="#3a2418"/>
+    <g class="blink" fill="#2b1c14"><circle cx="-14" cy="4" r="2.8"/><circle cx="2" cy="4" r="2.8"/></g>
+    <circle cx="-17" cy="12" r="4" fill="#e89a82" opacity=".6"/><circle cx="5" cy="12" r="4" fill="#e89a82" opacity=".6"/>
+    <path d="M-10 14q4 3 8 0" stroke="#7a3e2b" stroke-width="1.8" fill="none" stroke-linecap="round"/>`;
+  $('#headStand').innerHTML = HEAD; $('#headSit').innerHTML = HEAD;
+
+  const SEAT = { x: 560, y: 590 }, SPOT = { x: 538, y: 628 };
+  const FLOOR = { x0: 70, x1: 1135, y0: 610, y1: 695 };
+  const ZONE = { x0: 800, x1: 1160 };
+  const char = { x: SEAT.x, y: SEAT.y, face: 1, mode: 'sit', t: 0, phase: 0, from: null, moving: false };
+  const el = {
+    scene: $('#scene'), char: $('#char'), pStand: $('#pStand'), pSit: $('#pSit'),
+    legL: $('#legL'), legR: $('#legR'), armL: $('#armL'), armR: $('#armR'), sitBody: $('#sitBody'), headSit: $('#headSit'),
+  };
+
+  /* ---------- Input ---------- */
+  const keys = new Set(); const pad = new Set(); let target = null;
+  const KEYMAP = { KeyW: 'up', ArrowUp: 'up', KeyS: 'down', ArrowDown: 'down', KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right' };
+  let dialog = 'none'; // none | ask | browse | book
+  addEventListener('keydown', (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (dialog === 'welcome') { if (e.code === 'Escape') { e.preventDefault(); enterNook(); } else if (e.code === 'Tab') e.preventDefault(); return; }
+    if (e.code === 'Escape' && dialog !== 'none') { e.preventDefault(); back(); return; }
+    if (dialog !== 'none') { if (e.code === 'Tab') trapTab(e); return; }
+    const d = KEYMAP[e.code];
+    if (d) { e.preventDefault(); keys.add(d); target = null; }
+    else if (e.code === 'KeyE') { e.preventDefault(); interact(); }
+  });
+  addEventListener('keyup', (e) => { const d = KEYMAP[e.code]; if (d) keys.delete(d); });
+  addEventListener('blur', () => { keys.clear(); pad.clear(); document.querySelectorAll('.dpad .on').forEach((b) => b.classList.remove('on')); });
+
+  document.querySelectorAll('.dpad [data-dir]').forEach((b) => {
+    const d = b.dataset.dir;
+    const on = (e) => { e.preventDefault(); if (dialog !== 'none') return; pad.add(d); target = null; b.classList.add('on'); try { b.setPointerCapture(e.pointerId); } catch (_) {} };
+    const off = () => { pad.delete(d); b.classList.remove('on'); };
+    b.addEventListener('pointerdown', on); b.addEventListener('pointerup', off); b.addEventListener('pointercancel', off); b.addEventListener('lostpointercapture', off);
+    b.addEventListener('click', (e) => { if (e.detail === 0 && dialog === 'none') { pad.add(d); b.classList.add('on'); setTimeout(off, 260); } }); // keyboard activation
+  });
+  $('#actBtn').addEventListener('click', () => interact());
+  $('#prompt').addEventListener('click', () => interact());
+
+  el.scene.addEventListener('click', (e) => {
+    if (dialog !== 'none') return;
+    const sp = e.target.closest && e.target.closest('.spine');
+    if (sp && el.scene.classList.contains('zoomed')) { openBook(sp.dataset.id, 'room'); return; }
+    const pt = el.scene.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+    const m = el.scene.getScreenCTM(); if (!m) return;
+    const w = pt.matrixTransform(m.inverse());
+    target = { x: clamp(w.x, FLOOR.x0, FLOOR.x1), y: clamp(w.y, FLOOR.y0, FLOOR.y1) };
+  });
+
+  /* ---------- Camera ---------- */
+  const cam = { x: 430, y: 420, zoom: 1 };
+  let vw = 1200, vh = 720;
+  new ResizeObserver(() => { vw = el.scene.clientWidth || 1200; vh = el.scene.clientHeight || 720; }).observe(el.scene);
+  function updateCamera(dt, snap) {
+    const aspect = vw / vh;
+    const baseW = aspect >= 1200 / 720 ? 1200 : 720 * aspect;
+    const baseH = baseW / aspect;
+    const shelfH = SHELF.base - shelfInfo.top + 24;
+    const zShelf = clamp(Math.min(baseW / (SHELF.w * 1.3), baseH / (shelfH * 1.15)), 1, 2.3);
+    const near = (char.mode === 'idle' || char.mode === 'walk') ? smooth((char.x - 600) / 200) : 0;
+    const tz = lerp(1, zShelf, near);
+    const followX = char.mode === 'sit' ? 440 : char.x;
+    const tx = lerp(followX, SHELF.x0 + SHELF.w / 2, near);
+    const ty = lerp(430, (shelfInfo.top - 10 + 640) / 2, near);
+    const f = snap ? 1 : 1 - Math.exp(-dt * (reduceMotion ? 12 : 3.2));
+    cam.zoom += (tz - cam.zoom) * f; cam.x += (tx - cam.x) * f; cam.y += (ty - cam.y) * f;
+    const W = baseW / cam.zoom, H = baseH / cam.zoom;
+    const cx = clamp(cam.x, W / 2, 1200 - W / 2), cy = clamp(cam.y, H / 2, 720 - H / 2);
+    el.scene.setAttribute('viewBox', `${(cx - W / 2).toFixed(1)} ${(cy - H / 2).toFixed(1)} ${W.toFixed(1)} ${H.toFixed(1)}`);
+    const zt = zShelf > 1.001 ? (cam.zoom - 1) / (zShelf - 1) : near;
+    el.scene.classList.toggle('zoomed', zt > 0.7);
+    return clamp(zt, 0, 1);
+  }
+
+  /* ---------- Game loop ---------- */
+  const SPEED = 235;
+  let dwell = 0, armed = true, last = performance.now(), time = 0;
+
+  function wantDir() {
+    let dx = 0, dy = 0;
+    const has = (d) => keys.has(d) || pad.has(d);
+    if (has('left')) dx -= 1; if (has('right')) dx += 1; if (has('up')) dy -= 1; if (has('down')) dy += 1;
+    return { dx, dy };
+  }
+  const inZone = () => char.x >= ZONE.x0 && char.x <= ZONE.x1 && (char.mode === 'idle' || char.mode === 'walk');
+  const nearChair = () => (char.mode === 'idle' || char.mode === 'walk') && Math.hypot(char.x - SPOT.x, (char.y - SPOT.y) * 0.8) < 85;
+
+  function step(dt) {
+    time += dt;
+    const free = dialog === 'none';
+    let { dx, dy } = free ? wantDir() : { dx: 0, dy: 0 };
+    if (free && !dx && !dy && target && (char.mode === 'idle' || char.mode === 'walk' || char.mode === 'sit')) {
+      const vx = target.x - char.x, vy = target.y - (char.mode === 'sit' ? SPOT.y : char.y);
+      const d = Math.hypot(vx, vy);
+      if (d < 5) target = null; else { dx = vx / d; dy = vy / d; }
+    }
+    const wants = dx !== 0 || dy !== 0;
+
+    if (char.mode === 'sit' && wants) { char.mode = 'rise'; char.t = 0; char.from = { x: char.x, y: char.y }; }
+
+    if (char.mode === 'rise') {
+      char.t += dt / 0.65; const p = clamp(char.t, 0, 1), e = smooth(p);
+      char.x = lerp(char.from.x, SPOT.x, e); char.y = lerp(char.from.y, SPOT.y, e) - Math.sin(p * Math.PI) * 14;
+      if (p >= 1) { char.mode = 'idle'; char.y = SPOT.y; }
+    } else if (char.mode === 'sitdown') {
+      char.t += dt / 0.8; const p = clamp(char.t, 0, 1), e = smooth(p);
+      char.x = lerp(char.from.x, SEAT.x, e); char.y = lerp(char.from.y, SEAT.y, e) - Math.sin(p * Math.PI) * 14;
+      if (p >= 1) { char.mode = 'sit'; char.x = SEAT.x; char.y = SEAT.y; char.face = 1; }
+    } else if (char.mode === 'idle' || char.mode === 'walk') {
+      if (wants) {
+        const n = Math.hypot(dx, dy); dx /= n; dy /= n;
+        char.x = clamp(char.x + dx * SPEED * dt, FLOOR.x0, FLOOR.x1);
+        char.y = clamp(char.y + dy * SPEED * 0.55 * dt, FLOOR.y0, FLOOR.y1);
+        if (Math.abs(dx) > 0.15) char.face = dx < 0 ? 1 : -1;
+        char.phase += dt * SPEED * 0.052; char.mode = 'walk';
+      } else char.mode = 'idle';
+    }
+
+    render(updateCamera(dt));
+    updatePrompt();
+  }
+
+  function render(zt) {
+    const standing = char.mode === 'idle' || char.mode === 'walk';
+    const riseP = char.mode === 'rise' ? clamp(char.t, 0, 1) : char.mode === 'sitdown' ? 1 - clamp(char.t, 0, 1) : (char.mode === 'sit' ? 0 : 1);
+    const standOp = char.mode === 'sit' ? 0 : standing ? 1 : smooth((riseP - 0.25) / 0.45);
+    const sitOp = char.mode === 'sit' ? 1 : standing ? 0 : 1 - smooth((riseP - 0.1) / 0.45);
+    el.pStand.setAttribute('opacity', standOp.toFixed(2)); el.pSit.setAttribute('opacity', sitOp.toFixed(2));
+    const depth = standing || char.mode === 'rise' ? 0.92 + 0.2 * clamp((char.y - FLOOR.y0) / (FLOOR.y1 - FLOOR.y0), 0, 1) : 1;
+    const sc = char.mode === 'sit' ? 1 : lerp(1, depth, smooth(riseP));
+    const face = char.mode === 'sit' || char.mode === 'sitdown' ? 1 : char.face;
+    el.char.setAttribute('transform', `translate(${char.x.toFixed(1)},${char.y.toFixed(1)}) scale(${(sc * face).toFixed(3)},${sc.toFixed(3)})`);
+    // see-through when standing in front of the zoomed shelf
+    const over = standing && char.x > SHELF.x0 + 10 ? zt : 0;
+    el.char.setAttribute('opacity', lerp(1, 0.55, over).toFixed(2));
+    el.scene.classList.toggle('away', char.mode !== 'sit');
+
+    // walk cycle
+    if (standing) {
+      const w = char.mode === 'walk'; const s = w ? Math.sin(char.phase) : 0;
+      const bob = w ? Math.abs(Math.cos(char.phase)) * -3 : Math.sin(time * 2) * 0.6;
+      el.legL.setAttribute('transform', `rotate(${(s * 30).toFixed(1)})`); el.legR.setAttribute('transform', `rotate(${(-s * 30).toFixed(1)})`);
+      el.armL.setAttribute('transform', `rotate(${(-s * 26).toFixed(1)})`); el.armR.setAttribute('transform', `rotate(${(s * 26).toFixed(1)})`);
+      el.pStand.setAttribute('transform', `translate(0,${bob.toFixed(2)})`);
+    } else {
+      el.pStand.setAttribute('transform', 'translate(0,0)');
+      el.legL.setAttribute('transform', 'rotate(0)'); el.legR.setAttribute('transform', 'rotate(0)');
+    }
+    // seated breathing
+    el.sitBody.setAttribute('transform', `translate(0,${(Math.sin(time * 1.8) * 0.8).toFixed(2)})`);
+    el.headSit.setAttribute('transform', `translate(-16,${(-158 + Math.sin(time * 1.8) * 0.8).toFixed(2)}) rotate(${(10 + Math.sin(time * 0.7) * 1.5).toFixed(1)})`);
+  }
+
+  /* ---------- Prompt pill ---------- */
+  let promptKey = '';
+  function updatePrompt() {
+    let text = '', key = '';
+    const E = coarse ? '' : '<kbd>E</kbd> ';
+    if (dialog !== 'none') key = '';
+    else if (char.mode === 'sit' && !target) { key = 'stand'; text = coarse ? 'Use the arrows to stand up and walk' : 'Press <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or an arrow key to stand up'; }
+    else if (inZone()) { key = 'shelf'; text = coarse ? 'Tap to explore your bookshelf' : 'Press <kbd>E</kbd> to explore your bookshelf'; }
+    else if (nearChair()) { key = 'chair'; text = `${E}${coarse ? 'Tap to sit' : 'Sit'} back down and read`; }
+    if (key !== promptKey) {
+      promptKey = key; const p = $('#prompt');
+      if (key) p.innerHTML = text;
+      p.classList.toggle('show', !!key);
+      p.tabIndex = key ? 0 : -1;
+      if (key === 'stand') p.style.pointerEvents = 'none'; else p.style.pointerEvents = '';
+    }
+  }
+
+  function interact() {
+    if (dialog !== 'none') return;
+    if (inZone()) { openLibrary(); return; }
+    if (nearChair()) { char.mode = 'sitdown'; char.t = 0; char.from = { x: char.x, y: char.y }; target = null; }
+  }
+
+  /* ---------- Dialogs ---------- */
+  const layer = $('#layer'); let returnFocus = null; let cameFrom = 'room';
+  function show(html, focusSel) {
+    if (dialog === 'none') returnFocus = document.activeElement;
+    layer.innerHTML = html; layer.classList.add('open');
+    wireCoverFallback(layer, lookup);
+    const f = layer.querySelector(focusSel || 'button'); if (f) f.focus({ preventScroll: true });
+    keys.clear(); pad.clear(); target = null;
+  }
+  function close() {
+    dialog = 'none'; layer.classList.remove('open'); layer.innerHTML = '';
+    if (returnFocus && returnFocus.focus && document.contains(returnFocus)) returnFocus.focus({ preventScroll: true });
+    dwell = 0;
+  }
+  /* ---------- Library, book view, add a book ---------- */
+  const ui = { toast: '', results: [], query: '', status: 'idle', current: null, review: null, confirming: false, ctl: null };
+  const lookup = (id) => getBook(id) || ui.results.find((r) => r.id === id) || null;
+  const ICON_X = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+  const plural = (n) => `${n} ${n === 1 ? 'book' : 'books'}`;
+
+  function back() {
+    if (dialog === 'book') { if (ui.confirming) { ui.confirming = false; openBook(ui.current); } else openLibrary(); }
+    else if (dialog === 'review') openAdd();
+    else if (dialog === 'add') openLibrary();
+    else close();
+  }
+  function trapTab(e) {
+    const f = [...layer.querySelectorAll('button, input, [href], [tabindex]:not([tabindex="-1"])')].filter((n) => !n.disabled && n.offsetParent !== null);
+    if (!f.length) return;
+    const first = f[0], lastEl = f[f.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); lastEl.focus(); }
+    else if (!e.shiftKey && document.activeElement === lastEl) { e.preventDefault(); first.focus(); }
+    else if (!layer.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+  }
+
+  function openLibrary() {
+    dialog = 'library'; ui.confirming = false;
+    const n = books.length;
+    const grid = n ? books.map((b) => `<button class="cover-btn" data-book="${esc(b.id)}" aria-label="${esc(b.title)} by ${esc(b.author || 'unknown author')}"><span class="art">${coverHTML(b)}</span><span class="cap"><b>${esc(b.title)}</b><small>${esc(b.author || 'Author not listed')}</small></span></button>`).join('')
+      : '<div class="empty"><p>Your shelf is empty.</p><button class="btn primary" data-act="add">Add your first book</button></div>';
+    const toast = ui.toast ? `<div class="toast">${esc(ui.toast)}</div>` : ''; ui.toast = '';
+    show(`<div class="backdrop" data-act="close"></div><section class="panel library" role="dialog" aria-modal="true" aria-labelledby="libT" aria-describedby="libD">
+      <header><div><h2 id="libT">Your Little Library</h2><p id="libD">Every book on this shelf is part of your reading journey.</p></div>
+        <div class="hdr-actions"><button class="btn primary" data-act="add">Add a Book</button><button class="iconbtn" data-act="close" aria-label="Close the library and return to the room">${ICON_X}</button></div></header>
+      <div class="countbar" id="libCount">${plural(n)} in your library</div>
+      <div class="toastwrap" role="status" aria-live="polite">${toast}</div>
+      <div class="shelfgrid">${grid}</div>
+      <footer><button class="btn ghost" data-act="close">Back to the room</button></footer></section>`, n ? '.cover-btn' : '[data-act="add"]');
+    if (toast) setTimeout(() => { const t = layer.querySelector('.toast'); if (t) t.remove(); }, 6000);
+    $('#live').textContent = `Your Little Library. ${plural(n)}.`;
+  }
+
+  const fact = (label, value) => `<div><dt>${esc(label)}</dt><dd>${value}</dd></div>`;
+  const NOT_REC = '<span class="dim">Not recorded</span>';
+  function openBook(id) {
+    const b = getBook(id); if (!b) { openLibrary(); return; }
+    ui.current = id; dialog = 'book';
+    const facts = fact('ISBN', b.isbn ? esc(b.isbn) : NOT_REC)
+      + fact('First published (the work)', b.firstPublishYear ? esc(b.firstPublishYear) : NOT_REC)
+      + fact('This edition published', b.editionYear ? esc(b.editionYear) : NOT_REC)
+      + (b.edition ? fact('Edition', esc(b.edition)) : '');
+    const unconfirmed = b.verification && b.verification.openLibrary === 'not queried' ? '<p class="note">Title, author and ISBN were matched in retailer and library listings. Open Library has not confirmed this record, so the year details are blank.</p>' : '';
+    const actions = ui.confirming
+      ? `<div class="confirm" role="alertdialog" aria-labelledby="cfT"><p id="cfT">Remove “${esc(b.title)}” from your library? It will leave the shelf too.</p><div class="row"><button class="btn danger" data-act="remove-yes">Yes, remove it</button><button class="btn primary" data-act="remove-no">Keep it</button></div></div>`
+      : `<div class="row"><button class="btn primary" data-act="library">Back to the library</button><button class="btn" data-act="remove">Remove from my library</button></div>`;
+    show(`<div class="backdrop" data-act="library"></div><section class="panel bookview" role="dialog" aria-modal="true" aria-labelledby="bkT"><header><div></div><button class="iconbtn" data-act="close" aria-label="Close the library and return to the room">${ICON_X}</button></header>
+      <div class="bookbody"><div class="bigcover">${coverHTML(b)}</div><div class="meta"><h3 id="bkT">${esc(b.title)}</h3><p class="by">${esc(b.author || 'Author not listed')}</p>
+      <dl class="facts">${facts}</dl>${unconfirmed}${actions}</div></div></section>`, ui.confirming ? '[data-act="remove-no"]' : '[data-act="library"]');
+    $('#live').textContent = `${b.title} by ${b.author || 'unknown author'}`;
+  }
+  function removeCurrent() {
+    const b = getBook(ui.current); if (!b) { openLibrary(); return; }
+    books = books.filter((x) => x.id !== b.id); // strict id match: similar titles are never touched
+    saveLibrary(); renderShelf();
+    ui.toast = `“${b.title}” was removed from your library.`; ui.confirming = false; openLibrary();
+  }
+
+  /* ----- Add a book: Open Library search, explicit choice, review, then save ----- */
+  function docToBook(d) {
+    const key = d.key || null; const isbns = Array.isArray(d.isbn) ? d.isbn : [];
+    const isbn = isbns.find((i) => /^97[89]\d{10}$/.test(i)) || isbns.find((i) => /^\d{9}[\dX]$/.test(i)) || null;
+    const authors = Array.isArray(d.author_name) ? d.author_name.filter(Boolean) : [];
+    const id = key ? 'ol-' + key.split('/').pop().toLowerCase() : isbn ? 'isbn-' + isbn : 'title-' + hash(d.title + authors.join('|')).toString(36);
+    return normalize({ id, title: d.title, authors, isbn, coverId: d.cover_i || null, firstPublishYear: d.first_publish_year || null, edition: null, editionKey: null, workKey: key,
+      coverUrl: d.cover_i ? OL_COVER(d.cover_i, 'M') : null, source: 'open-library-search' });
+  }
+  async function searchOpenLibrary(q) {
+    if (ui.ctl) ui.ctl.abort();
+    const ctl = ui.ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), 12000);
+    try {
+      const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&fields=key,title,author_name,cover_i,first_publish_year,isbn&limit=12`;
+      const res = await fetch(url, { signal: ctl.signal }); if (!res.ok) throw new Error('http ' + res.status);
+      const data = await res.json();
+      return (data.docs || []).filter((d) => d && typeof d.title === 'string' && d.title).map(docToBook);
+    } finally { clearTimeout(timer); }
+  }
+  async function runSearch(q) {
+    q = q.trim(); if (!q) return;
+    ui.query = q; ui.status = 'loading'; renderResults();
+    const mine = ++searchSeq;
+    try { const r = await searchOpenLibrary(q); if (mine !== searchSeq) return; ui.results = r; ui.status = r.length ? 'done' : 'empty'; }
+    catch (_) { if (mine !== searchSeq) return; ui.results = []; ui.status = 'error'; }
+    renderResults();
+  }
+  let searchSeq = 0;
+
+  function renderResults() {
+    const box = layer.querySelector('#results'); if (!box) return;
+    let h = '';
+    if (ui.status === 'idle') h = '<p class="msg">Search by title or author. Matches come from Open Library, and nothing is added until you choose it.</p>';
+    else if (ui.status === 'loading') h = '<p class="msg">Searching Open Library…</p>';
+    else if (ui.status === 'error') h = '<div class="msg"><p>Could not reach Open Library, so there are no results to show. Check your connection and try again. Your library has not changed.</p><button class="btn" data-act="retry">Try again</button></div>';
+    else if (ui.status === 'empty') h = `<p class="msg">No books found for “${esc(ui.query)}”. Check the spelling, or try the author’s name instead.</p>`;
+    else h = '<ul>' + ui.results.map((r, i) => {
+      const dup = findDuplicate(r);
+      const ident = r.isbn ? `ISBN ${esc(r.isbn)}` : r.workKey ? `Open Library ${esc(r.workKey.split('/').pop())}` : 'No identifier listed';
+      return `<li class="result"><span class="thumb">${coverHTML(r)}</span><span class="rinfo"><b>${esc(r.title)}</b><span>${esc(r.author || 'Author not listed')}</span><span class="rmeta">First published ${r.firstPublishYear ? esc(r.firstPublishYear) : 'year not listed'} · ${ident}</span></span>
+        ${dup ? '<span class="badge">Already in your library</span>' : `<button class="btn" data-pick="${i}" aria-label="Review ${esc(r.title)} by ${esc(r.author || 'unknown author')}">Choose</button>`}</li>`;
+    }).join('') + '</ul>';
+    box.innerHTML = h; wireCoverFallback(box, lookup);
+  }
+
+  function openAdd() {
+    dialog = 'add';
+    show(`<div class="backdrop" data-act="library"></div><section class="panel addview" role="dialog" aria-modal="true" aria-labelledby="adT">
+      <header><div><h2 id="adT">Add a Book</h2><p>Search by title or author, then choose the book you mean.</p></div><button class="iconbtn" data-act="close" aria-label="Close the library and return to the room">${ICON_X}</button></header>
+      <form class="searchbar" id="searchForm" role="search"><label class="sr" for="q">Search by title or author</label><input id="q" name="q" type="search" autocomplete="off" placeholder="Title or author" value="${esc(ui.query)}"><button class="btn primary" type="submit">Search</button></form>
+      <div class="results" id="results" aria-live="polite"></div>
+      <footer><button class="btn ghost" data-act="library">Back to the library</button></footer></section>`, '#q');
+    renderResults();
+  }
+
+  function openReview(i) {
+    const r = ui.results[i]; if (!r) return;
+    ui.review = r; dialog = 'review';
+    const dup = findDuplicate(r);
+    const warn = [];
+    if (!r.authors.length) warn.push('The catalogue lists no author for this result.');
+    if (!r.coverSources.length) warn.push('The catalogue has no cover for this result.');
+    if (!r.firstPublishYear) warn.push('No first publication year is listed.');
+    show(`<div class="backdrop" data-act="results"></div><section class="panel bookview" role="dialog" aria-modal="true" aria-labelledby="rvT"><header><div><h2 id="rvT">Is this the book you mean?</h2></div><button class="iconbtn" data-act="close" aria-label="Close the library and return to the room">${ICON_X}</button></header>
+      <div class="bookbody"><div class="bigcover">${coverHTML(r)}</div><div class="meta"><h3>${esc(r.title)}</h3><p class="by">${esc(r.author || 'Author not listed')}</p>
+      <dl class="facts">${fact('ISBN', r.isbn ? esc(r.isbn) : NOT_REC)}${fact('Open Library work', r.workKey ? esc(r.workKey) : NOT_REC)}${fact('First published (the work)', r.firstPublishYear ? esc(r.firstPublishYear) : NOT_REC)}</dl>
+      ${r.isbn ? '<p class="note">The ISBN is one the catalogue lists for this work. It may belong to a different edition from the cover shown.</p>' : ''}
+      ${warn.length ? `<p class="note">${esc(warn.join(' '))}</p>` : ''}
+      ${dup ? `<p class="note">This matches “${esc(dup.title)}”, which is already in your library.</p>` : ''}
+      <div class="row">${dup ? '' : '<button class="btn primary" data-act="confirm-add">Add to my library</button>'}<button class="btn" data-act="results">Back to results</button></div></div></div></section>`, dup ? '[data-act="results"]' : '[data-act="confirm-add"]');
+  }
+  function confirmAdd() {
+    const r = ui.review; if (!r) return;
+    if (findDuplicate(r)) { openAdd(); return; }
+    const rec = toRecord(r);
+    rec.coverUrl = rec.coverId ? OL_COVER(rec.coverId) : (rec.isbn ? OL_ISBN(rec.isbn) : null);
+    rec.addedAt = Date.now();
+    rec.verification = { titleAuthorIsbn: 'as returned by the Open Library search result the reader chose', openLibrary: 'search result selected by the reader', cover: rec.coverId ? 'cover ID from the same search result' : 'looked up by ISBN' };
+    const nb = normalize(rec); books = books.concat([nb]);
+    saveLibrary(); renderShelf(); tintSpine(nb);
+    ui.toast = `“${nb.title}” was added to your library.`; ui.review = null; openLibrary();
+  }
+
+  layer.addEventListener('submit', (e) => { e.preventDefault(); const q = layer.querySelector('#q'); if (q) runSearch(q.value); });
+  layer.addEventListener('click', (e) => {
+    const t = e.target.closest('[data-act], [data-book], [data-pick]'); if (!t) return;
+    if (t.dataset.book) { openBook(t.dataset.book); return; }
+    if (t.dataset.pick !== undefined) { openReview(+t.dataset.pick); return; }
+    switch (t.dataset.act) {
+      case 'close': close(); break;
+      case 'library': openLibrary(); break;
+      case 'add': openAdd(); break;
+      case 'results': openAdd(); break;
+      case 'retry': runSearch(ui.query); break;
+      case 'remove': ui.confirming = true; openBook(ui.current); break;
+      case 'remove-no': ui.confirming = false; openBook(ui.current); break;
+      case 'remove-yes': removeCurrent(); break;
+      case 'confirm-add': confirmAdd(); break;
+    }
+  });
+
+  /* ---------- Welcome ----------
+     The room keeps running behind the overlay; only input is paused (dialog === 'welcome').
+     The first-visit choice is remembered in localStorage, which can be unavailable, so every access is guarded. */
+  const WELCOME_KEY = 'readingNook.welcomed';
+  const seen = { get() { try { return localStorage.getItem(WELCOME_KEY) === '1'; } catch (_) { return false; } }, set() { try { localStorage.setItem(WELCOME_KEY, '1'); } catch (_) {} } };
+  const welcomeEl = $('#welcome');
+  let welcomeTimer = 0;
+  function openWelcome() {
+    if (dialog !== 'none') return;
+    clearTimeout(welcomeTimer);
+    dialog = 'welcome'; returnFocus = document.activeElement;
+    keys.clear(); pad.clear(); target = null;
+    welcomeEl.hidden = false; void welcomeEl.offsetWidth; welcomeEl.classList.add('in');
+    $('#enterBtn').focus({ preventScroll: true });
+  }
+  function enterNook() {
+    if (dialog !== 'welcome') return;
+    seen.set(); dialog = 'none'; dwell = 0;
+    welcomeEl.classList.remove('in');
+    welcomeTimer = setTimeout(() => { welcomeEl.hidden = true; }, reduceMotion ? 0 : 850);
+    if (returnFocus && returnFocus.focus && document.contains(returnFocus) && returnFocus !== document.body) returnFocus.focus({ preventScroll: true });
+    else if (document.activeElement) document.activeElement.blur();
+  }
+  $('#enterBtn').addEventListener('click', enterNook);
+  $('#againBtn').addEventListener('click', openWelcome);
+
+  /* ---------- Clock on the wall ---------- */
+  function tick() {
+    const d = new Date(); const m = d.getMinutes() + d.getSeconds() / 60, h = (d.getHours() % 12) + m / 60;
+    $('#minHand').setAttribute('transform', `rotate(${m * 6} 722 150)`); $('#hourHand').setAttribute('transform', `rotate(${h * 30} 722 150)`);
+  }
+  tick(); setInterval(tick, 5000);
+
+  /* ---------- Public API: connect a real account here later ---------- */
+  window.ReadingNook = {
+    get books() { return books.map(toRecord); },
+    setBooks(list) { books = (Array.isArray(list) ? list.filter(validBook) : []).map(normalize); saveLibrary(); renderShelf(); books.forEach(tintSpine); },
+    addBook(b) { if (!validBook(b)) return false; const nb = normalize(b); if (findDuplicate(nb)) return false; books = books.concat([nb]); saveLibrary(); renderShelf(); tintSpine(nb); return true; },
+    removeBook(id) { const n = books.length; books = books.filter((b) => b.id !== id); if (books.length !== n) { saveLibrary(); renderShelf(); return true; } return false; },
+  };
+
+  /* ---------- Start ---------- */
+  initLibrary();
+  render(0); updateCamera(0, true); updatePrompt();
+  if (!seen.get()) openWelcome();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    step(dt);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame((n) => { last = n; frame(n); });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "note": "Starter shelf. ISBNs were matched to titles and authors in retailer and library listings. Open Library could not be queried when this file was written, so coverId, firstPublishYear, edition and workKey are null rather than guessed. Cover URLs point at the Open Library Covers API by ISBN and were not fetched.",
+  "books": [
+    { "id": "atomic-habits", "title": "Atomic Habits", "authors": ["James Clear"], "isbn": "9780735211292", "coverId": null, "firstPublishYear": null, "edition": null, "workKey": null, "editionKey": null,
+      "coverUrl": "https://covers.openlibrary.org/b/isbn/9780735211292-L.jpg?default=false", "source": "starter",
+      "verification": { "titleAuthorIsbn": "matched in retailer and library listings", "openLibrary": "not queried", "cover": "not fetched" }, "spine": { "color": "#d9b24a" } },
+    { "id": "silent-patient", "title": "The Silent Patient", "authors": ["Alex Michaelides"], "isbn": "9781250301697", "coverId": null, "firstPublishYear": null, "edition": null, "workKey": null, "editionKey": null,
+      "coverUrl": "https://covers.openlibrary.org/b/isbn/9781250301697-L.jpg?default=false", "source": "starter",
+      "verification": { "titleAuthorIsbn": "matched in retailer and library listings", "openLibrary": "not queried", "cover": "not fetched" }, "spine": { "color": "#1d2a44" } },
+    { "id": "ikigai", "title": "Ikigai", "authors": ["Héctor García", "Francesc Miralles"], "isbn": "9780143130727", "coverId": null, "firstPublishYear": null, "edition": null, "workKey": null, "editionKey": null,
+      "coverUrl": "https://covers.openlibrary.org/b/isbn/9780143130727-L.jpg?default=false", "source": "starter",
+      "verification": { "titleAuthorIsbn": "matched in retailer and library listings", "openLibrary": "not queried", "cover": "not fetched" }, "spine": { "color": "#c2495a" } },
+    { "id": "psychology-of-money", "title": "The Psychology of Money", "authors": ["Morgan Housel"], "isbn": "9780857197689", "coverId": null, "firstPublishYear": null, "edition": null, "workKey": null, "editionKey": null,
+      "coverUrl": "https://covers.openlibrary.org/b/isbn/9780857197689-L.jpg?default=false", "source": "starter",
+      "verification": { "titleAuthorIsbn": "matched in retailer and library listings", "openLibrary": "not queried", "cover": "not fetched" }, "spine": { "color": "#2f5d45" } },
+    { "id": "the-alchemist", "title": "The Alchemist", "authors": ["Paulo Coelho"], "isbn": "9780062315007", "coverId": null, "firstPublishYear": null, "edition": null, "workKey": null, "editionKey": null,
+      "coverUrl": "https://covers.openlibrary.org/b/isbn/9780062315007-L.jpg?default=false", "source": "starter",
+      "verification": { "titleAuthorIsbn": "matched in retailer and library listings", "openLibrary": "not queried", "cover": "not fetched" }, "spine": { "color": "#b9622f" } }
+  ]
+}
